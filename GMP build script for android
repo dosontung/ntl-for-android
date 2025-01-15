@@ -1,0 +1,26 @@
+export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
+# Only choose one of these, depending on your device...
+#export TARGET=x86_64-linux-android
+#export TARGET_ABI=x86_64
+
+#export TARGET=i686-linux-android
+#export TARGET_ABI=x86
+
+export TARGET=aarch64-linux-android
+export TARGET_ABI=arm64-v8a
+
+#export TARGET=armv7a-linux-androideabi
+#export TARGET_ABI=armeabi-v7a
+# Set this to your minSdkVersion.
+export API=28
+# Configure and build.
+export AR=$TOOLCHAIN/bin/llvm-ar
+export CC="$TOOLCHAIN/bin/clang --target=$TARGET$API"
+export AS=$CC
+export CXX="$TOOLCHAIN/bin/clang++ --target=$TARGET$API"
+export LD=$TOOLCHAIN/bin/ld
+export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
+export STRIP=$TOOLCHAIN/bin/llvm-strip
+export CFLAGS="-fpic -O2"
+export CXXFLAGS="-fpic -O2"
+./configure --host $TARGET --prefix=`pwd`/.$TARGET_ABI --disable-assembly --disable-shared
