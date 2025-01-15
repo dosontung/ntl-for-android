@@ -1,0 +1,319 @@
+diff --git a/doc/config.txt b/doc/config.txt
+index 985631a..87ef953 100644
+--- a/doc/config.txt
++++ b/doc/config.txt
+@@ -7,12 +7,17 @@ variables on the command line.
+ 
+ 
+ ########### Here are the most important variables, and their default values.
++ABI=x86              # Android target architecture
++
++PHONE_TMP_DIR=/data/local/tmp/test_ntl  # Phone TMP
++
++ANDROID_BUILD_FLAG=-static-libstdc++ -static-libgcc -lc++_static -lc++abi
+ 
+ CXX=g++              # The C++ compiler
+ 
+ CXXFLAGS=-g -O2      # C++ complilation flags
+ 
+-NATIVE=on            # compiles code targeted to current hardware
++NATIVE=off            # compiles code targeted to current hardware
+ 
+ TUNE=generic         # performance-tuning switch  
+ (or x86 or linux-s390x) 
+diff --git a/src/DoConfig b/src/DoConfig
+index f6ea3d0..289da78 100644
+--- a/src/DoConfig
++++ b/src/DoConfig
+@@ -8,13 +8,16 @@ system("echo '*** CompilerOutput.log ***' > CompilerOutput.log");
+ 
+ %MakeFlag = (
+ 'SHARED'  => 'off',
+-'NATIVE'  => 'on',
++'NATIVE'  => 'off',
+ );
+ 
+ %MakeVal = (
+ 
+ 'CXX'	      => 'g++',
+ 'CXXFLAGS'    => '-g -O2',
++'ABI'         => '',
++'PHONE_TMP_DIR' => '/data/local/tmp/test_ntl',
++'ANDROID_BUILD_FLAG' => '-static-libstdc++ -static-libgcc -lc++_static -lc++abi',
+ 'CXXAUTOFLAGS'=> '',
+ 'NOCONTRACT'  => '',
+ 'AR'	      => 'ar',
+@@ -475,7 +478,10 @@ sub Exec {
+       # icc just gives warnings for bad command line args
+       RemoveProg("$name") and return 0;
+    }
+-   system("./$name") and RemoveProg("$name") and return 0;
++   system("adb push $name /data/local/tmp/test_ntl");
++   system("adb shell /data/local/tmp/test_ntl/$name") and RemoveProg("$name") and return 0;
++   #system("./$name") and RemoveProg("$name") and return 0;
++
+    RemoveProg("$name") and return 1;
+ }
+ 
+@@ -644,8 +650,12 @@ if(system("$MakeSub{'MAKE_PROG'} GenConfigInfo >> CompilerOutput.log 2>&1")) {
+    print("See CompilerOutput.log for details\n");
+    die "Goodbye!";
+ }
++system("adb shell  mkdir -p $MakeSub{'PHONE_TMP_DIR'}");
++system("adb push GenConfigInfo $MakeSub{'PHONE_TMP_DIR'}");
++system("adb shell $MakeSub{'PHONE_TMP_DIR'}/GenConfigInfo");
++my $config_info = `adb shell $MakeSub{'PHONE_TMP_DIR'}/GenConfigInfo`;
+ 
+-my $config_info = `./GenConfigInfo`;
++#print($config_info);
+ 
+ my ($compiler_name, $language_standard, $cpu_type, $os_name);
+ ($compiler_name, $language_standard, $cpu_type, $os_name) =
+diff --git a/src/MakeGetPID b/src/MakeGetPID
+index 01fa3f2..3682b4d 100644
+--- a/src/MakeGetPID
++++ b/src/MakeGetPID
+@@ -8,8 +8,10 @@ echo "who am I?"
+ 
+ 
+ sh RemoveProg TestGetPID
+-echo $1 -o TestGetPID TestGetPID.cpp GetPID1.cpp $2  >> "CheckFeatures.log" 2>&1
+-$1 -o TestGetPID TestGetPID.cpp GetPID1.cpp $2  >> "CheckFeatures.log" 2>&1
++echo $1 -o TestGetPID TestGetPID.cpp GetPID1.cpp  >> "CheckFeatures.log" 2>&1
++$1 -o TestGetPID TestGetPID.cpp GetPID1.cpp  >> "CheckFeatures.log" 2>&1
++
++adb push TestGetPID $2/
+ 
+ if test -f TestGetPID
+ then
+diff --git a/src/MakeGetTime b/src/MakeGetTime
+index 992cf76..baa1c94 100644
+--- a/src/MakeGetTime
++++ b/src/MakeGetTime
+@@ -8,12 +8,13 @@ echo "does anybody really know what time it is?"
+ 
+ 
+ sh RemoveProg TestGetTime
+-echo $1 -o TestGetTime TestGetTime.cpp GetTime1.cpp $2  >> "CheckFeatures.log" 2>&1
+-$1 -o TestGetTime TestGetTime.cpp GetTime1.cpp $2 >> "CheckFeatures.log" 2>&1
++echo $1 -o TestGetTime TestGetTime.cpp GetTime1.cpp  >> "CheckFeatures.log" 2>&1
++$1 -o TestGetTime TestGetTime.cpp GetTime1.cpp >> "CheckFeatures.log" 2>&1
+ 
++adb push TestGetTime $2/
+ if test -f TestGetTime
+ then
+-if ./TestGetTime 1 1048576 1048575 >> "CheckFeatures.log" 2>&1
++if adb shell $2/TestGetTime 1 1048576 1048575
+ then
+ cp GetTime1.cpp GetTime.cpp
+ echo "using GetTime1.cpp"
+@@ -23,12 +24,15 @@ fi
+ 
+ 
+ sh RemoveProg TestGetTime
+-echo $1 -o TestGetTime TestGetTime.cpp GetTime2.cpp $2  >> "CheckFeatures.log" 2>&1
+-$1 -o TestGetTime TestGetTime.cpp GetTime2.cpp $2  >> "CheckFeatures.log" 2>&1
++sh AndroidRemoveProg $2/TestGetTime
++echo $1 -o TestGetTime TestGetTime.cpp GetTime2.cpp >> "CheckFeatures.log" 2>&1
++$1 -o TestGetTime TestGetTime.cpp GetTime2.cpp >> "CheckFeatures.log" 2>&1
++
++adb push TestGetTime $2/
+ 
+ if test -f TestGetTime
+ then
+-if ./TestGetTime 1 1048576 1048575 >> "CheckFeatures.log" 2>&1
++if adb shell $2/TestGetTime 1 1048576 1048575
+ then
+ cp GetTime2.cpp GetTime.cpp
+ echo "using GetTime2.cpp"
+@@ -37,12 +41,15 @@ fi
+ fi
+ 
+ sh RemoveProg TestGetTime
+-echo $1 -o TestGetTime TestGetTime.cpp GetTime3.cpp $2  >> "CheckFeatures.log" 2>&1
+-$1 -o TestGetTime TestGetTime.cpp GetTime3.cpp $2  >> "CheckFeatures.log" 2>&1
++sh AndroidRemoveProg $2/TestGetTime
++echo $1 -o TestGetTime TestGetTime.cpp GetTime3.cpp >> "CheckFeatures.log" 2>&1
++$1 -o TestGetTime TestGetTime.cpp GetTime3.cpp >> "CheckFeatures.log" 2>&1
++
++adb push TestGetTime $2/
+ 
+ if test -f TestGetTime
+ then
+-if ./TestGetTime 1 1048576 1048575 >> "CheckFeatures.log" 2>&1
++if adb shell $2/TestGetTime 1 1048576 1048575
+ then
+ cp GetTime3.cpp GetTime.cpp
+ echo "using GetTime3.cpp"
+@@ -51,13 +58,14 @@ fi
+ fi
+ 
+ sh RemoveProg TestGetTime
+-echo $1 -o TestGetTime TestGetTime.cpp GetTime4.cpp $2  >> "CheckFeatures.log" 2>&1
+-$1 -o TestGetTime TestGetTime.cpp GetTime4.cpp $2  >> "CheckFeatures.log" 2>&1
++sh AndroidRemoveProg $2/TestGetTime
++echo $1 -o TestGetTime TestGetTime.cpp GetTime4.cpp >> "CheckFeatures.log" 2>&1
++$1 -o TestGetTime TestGetTime.cpp GetTime4.cpp >> "CheckFeatures.log" 2>&1
+ 
+ 
+ if test -f TestGetTime
+ then
+-if ./TestGetTime 1 1048576 1048575 >> "CheckFeatures.log" 2>&1
++if adb shell $2/TestGetTime 1 1048576 1048575
+ then
+ cp GetTime4.cpp GetTime.cpp
+ echo "using GetTime4.cpp"
+@@ -66,9 +74,12 @@ fi
+ fi
+ 
+ sh RemoveProg TestGetTime
+-echo $1 -o TestGetTime TestGetTime.cpp GetTime5.cpp $2  >> "CheckFeatures.log" 2>&1
+-$1 -o TestGetTime TestGetTime.cpp GetTime5.cpp $2  >> "CheckFeatures.log" 2>&1
++sh AndroidRemoveProg $2/TestGetTime
++echo $1 -o TestGetTime TestGetTime.cpp GetTime5.cpp >> "CheckFeatures.log" 2>&1
++$1 -o TestGetTime TestGetTime.cpp GetTime5.cpp >> "CheckFeatures.log" 2>&1
++
+ 
++adb push TestGetTime $2/
+ 
+ if test -f TestGetTime
+ then
+diff --git a/src/mfile b/src/mfile
+index 1c704d0..4252dd7 100644
+--- a/src/mfile
++++ b/src/mfile
+@@ -5,16 +5,21 @@
+ #
+ ###############################################################
+ 
++TARGET_ARCH_ABI=@{ABI}
++# Target architecture is x86
+ 
++PHONE_TMP_DIR=@{PHONE_TMP_DIR}
++#
++ANDROID_BUILD_FLAG=@{ANDROID_BUILD_FLAG}
+ 
+-CXX=@{CXX}
++CXX=@{CXX} ${ANDROID_BUILD_FLAG}
+ # A C++ compiler, e.g., g++, CC, xlC
+ 
+ 
+ CXXFLAGS=@{CXXFLAGS}
+ # Flags for the C++ compiler
+ 
+-CXXAUTOFLAGS=@{CXXAUTOFLAGS}
++CXXAUTOFLAGS=@{CXXAUTOFLAGS} -fPIC -ffunction-sections -fdata-sections -Wl,--gc-sections
+ # Flags for the C++ compiler, automatically generated by configuration script
+ 
+ NOCONTRACT=@{NOCONTRACT}
+@@ -79,7 +84,7 @@ DESTDIR=
+ ###############################################################
+ 
+ 
+-GMP_PREFIX=@{GMP_PREFIX}
++GMP_PREFIX=@{GMP_PREFIX}/.@{ABI}
+ 
+ GMP_INCDIR=@{GMP_INCDIR}
+ # directory containing gmp.h if using GMP 
+@@ -89,7 +94,7 @@ GMP_LIBDIR=@{GMP_LIBDIR}
+ 
+ GMP_OPT_INCDIR=@{GMPI}-I$(GMP_INCDIR) # GMPI
+ GMP_OPT_LIBDIR=@{GMPL}-L$(GMP_LIBDIR) # GMPL
+-GMP_OPT_LIB=@{GMP}-lgmp # GMP
++GMP_OPT_LIB=@{GMP}-lgmp -static# GMP
+ # uncomment these if using GMP
+ 
+ 
+@@ -331,20 +336,34 @@ setup-phase: need-to-run-configure
+ 
+ # setup1 generates the file ../incluse/NTL/mach_desc.h
+ 
+-setup1: 
++
++#setup1:
++#	$(COMPILE) MakeDescAux.cpp
++#	$(LINK) -o MakeDesc MakeDesc.cpp MakeDescAux.o $(LDLIBS)
++#	./MakeDesc
++#	mv mach_desc.h ../include/NTL/mach_desc.h
++
++setup1:
+ 	$(COMPILE) MakeDescAux.cpp
+ 	$(LINK) -o MakeDesc MakeDesc.cpp MakeDescAux.o $(LDLIBS)
+-	./MakeDesc
++	adb shell mkdir -p $(PHONE_TMP_DIR)
++	adb push MakeDesc $(PHONE_TMP_DIR)/MakeDesc
++	adb shell "cd $(PHONE_TMP_DIR) && $(PHONE_TMP_DIR)/MakeDesc"
++	adb pull $(PHONE_TMP_DIR)/mach_desc.h
+ 	mv mach_desc.h ../include/NTL/mach_desc.h
+ 
+-
+ # setup2 does some dynamic checks for GetTime, GetPID, and other features
+ 
++#setup2:
++#	echo "*** CheckFeatures log ***" > CheckFeatures.log
++#	sh MakeGetTime "$(LINK)" "$(LDLIBS)"
++#	sh MakeGetPID  "$(LINK)" "$(LDLIBS)"
++#	sh MakeCheckFeatures "$(FEATURES)" "$(LINK)" "$(LDLIBS)"
+ setup2:
+-	echo "*** CheckFeatures log ***" > CheckFeatures.log
+-	sh MakeGetTime "$(LINK)" "$(LDLIBS)"
+-	sh MakeGetPID  "$(LINK)" "$(LDLIBS)"
+-	sh MakeCheckFeatures "$(FEATURES)" "$(LINK)" "$(LDLIBS)"
++	adb shell mkdir -p $(PHONE_TMP_DIR)
++	sh MakeGetTime "$(LINK)" "$(PHONE_TMP_DIR)"
++	sh MakeGetPID "$(LINK)" "$(PHONE_TMP_DIR)"
++
+ 
+ # NOTE: to add a feature XXX:
+ #   * add a program CheckXXX.cpp which returns 0 if XXX works, -1 otherwise
+@@ -356,11 +375,17 @@ setup2:
+ # When this flag is not set, an empty files produced.
+ # This also checks that the right version of gf2x library.
+ 
+-setup3:
+-	$(LINK) $(GMP_OPT_INCDIR) -o gen_gmp_aux gen_gmp_aux.cpp $(GMP_OPT_LIBDIR) $(GMP_OPT_LIB) $(LDLIBS)
+-	./gen_gmp_aux > ../include/NTL/gmp_aux.h 
+-	$(LINK) $(GF2X_OPT_INCDIR) -o gf2x_version_1_2_or_later_required gf2x_version_1_2_or_later_required.cpp $(GF2X_OPT_LIBDIR) $(GF2X_OPT_LIB) $(LDLIBS) 
++#setup3:
++#	$(LINK) $(GMP_OPT_INCDIR) -o gen_gmp_aux gen_gmp_aux.cpp $(GMP_OPT_LIBDIR) $(GMP_OPT_LIB) $(LDLIBS)
++#	./gen_gmp_aux > ../include/NTL/gmp_aux.h
++#	$(LINK) $(GF2X_OPT_INCDIR) -o gf2x_version_1_2_or_later_required gf2x_version_1_2_or_later_required.cpp $(GF2X_OPT_LIBDIR) $(GF2X_OPT_LIB) $(LDLIBS)
+ 
++setup3:
++	$(LINK) $(GMP_OPT_INCDIR) -o gen_gmp_aux gen_gmp_aux.cpp $(GMP_OPT_LIBDIR) $(GMP_OPT_LIB)
++	adb shell mkdir -p $(PHONE_TMP_DIR)
++	adb push $(GMP_LIBDIR)/libgmp.so /data/local/tmp/
++	adb push gen_gmp_aux $(PHONE_TMP_DIR)/gen_gmp_aux
++	adb shell "cd $(PHONE_TMP_DIR) && export LD_LIBRARY_PATH=/data/local/tmp:$LD_LIBRARY_PATH && ./gen_gmp_aux" > ../include/NTL/gmp_aux.h
+ # setup4 runs the wizard
+ 
+ setup4:
+@@ -478,6 +503,7 @@ clobber:
+ 	sh ResetFeatures '..' "$(FEATURES)" 
+ 	rm -f ../include/NTL/gmp_aux.h
+ 	sh RemoveProg $(PROGS) MakeDesc $(AUXPROGS) gen_gmp_aux gf2x_version_1_2_or_later_required
++	adb shell mkdir -p $(PHONE_TMP_DIR) && adb shell rm -r $(PHONE_TMP_DIR)
+ 	rm -f *.o
+ 	rm -rf small
+ 	rm -f cfileout mfileout
+diff --git a/src/run.sh b/src/run.sh
+new file mode 100755
+index 0000000..61c436b
+--- /dev/null
++++ b/src/run.sh
+@@ -0,0 +1,15 @@
++export TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/linux-x86_64
++# Only choose one of these, depending on your device...
++export TARGET=i686-linux-android
++export ABI=x86
++# Set this to your minSdkVersion.
++export API=28
++# Configure and build.
++export AR=$TOOLCHAIN/bin/llvm-ar
++export CC="$TOOLCHAIN/bin/clang --target=$TARGET$API"
++export AS=$CC
++export CXX="$TOOLCHAIN/bin/clang++ --target=$TARGET$API"
++export LD=$TOOLCHAIN/bin/ld
++export RANLIB=$TOOLCHAIN/bin/llvm-ranlib
++export STRIP=$TOOLCHAIN/bin/llvm-strip
++./configure ABI=$ABI  GMP_PREFIX=$GMP_BUILD CXX="$CXX" RANLIB=$RANLIB  NTL_SAFE_VECTORS=off DEF_PREFIX=`pwd`/../.$ABI 
